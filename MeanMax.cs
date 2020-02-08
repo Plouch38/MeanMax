@@ -41,6 +41,7 @@ public abstract class Looter{
     public Coordinate acceleration;
     public int waterAvailable;
     public int waterMax;
+    public Weapon skill;
 
     public Looter(int _unitId, int _unitType, int _playerId, float _mass, int _radius, int _x, int _y, int _vx, int _vy, int _extra, int _extra2)
     {
@@ -57,9 +58,9 @@ public abstract class Looter{
 
     public int DistanceFrom(Coordinate c)
     {
-        Console.Error.WriteLine("Destination : " + c.ToString() + "Position actuelle : " + position.ToString());
+        //Console.Error.WriteLine("Destination : " + c.ToString() + "Position actuelle : " + position.ToString());
         int distance = (int)Math.Sqrt(Math.Pow(c.X - position.X,2) + Math.Pow(c.Y - position.Y,2));
-        Console.Error.WriteLine("Distance : " + distance );
+        //Console.Error.WriteLine("Distance : " + distance );
         
         return distance;
     }
@@ -72,10 +73,10 @@ public abstract class Looter{
         return new Coordinate(newX, newY);        
     }
 
-    public Coordinate ClosestUnit(List<Looter> unitList, int _unitType)
+    public Looter ClosestUnit(List<Looter> unitList, int _unitType)
     {
         int minDistance = 10000;
-        Coordinate target = null;
+        Looter target = null;
         List<Looter> list;
 
         if (_unitType == -1)
@@ -87,21 +88,16 @@ public abstract class Looter{
             list = unitList.Where(x => x.unitType == _unitType).ToList();
         }
 
-        if (list.Count == 0)
-        {
-            target = new Coordinate(0,0);
-        }
-
         foreach (Looter l in list)
         {
-            Console.Error.WriteLine("Looter in list : " + l.unitId + " Type : " + l.unitType);
+            //Console.Error.WriteLine("Looter in list : " + l.unitId + " Type : " + l.unitType);
             if (DistanceFrom(l.position) < minDistance)
             {
                 minDistance = DistanceFrom(l.position);
-                target = l.position;
+                target = l;
             }
         }
-        Console.Error.WriteLine("Closest Unit in (" + string.Join(", ", list) + ") : " + target.ToString());
+        //Console.Error.WriteLine("Closest Unit in (" + string.Join(", ", list) + ") : " + target.ToString());
 
         return target;
     }
@@ -122,6 +118,11 @@ public abstract class Looter{
         Console.WriteLine("WAIT");
     }
 
+    public static void Skill(Coordinate coor)
+    {
+        Console.WriteLine("SKILL " + coor.X + " " + coor.Y);
+    }
+
 }
 
 public class Reaper : Looter{
@@ -132,9 +133,49 @@ public class Reaper : Looter{
 
     public override void Decide()
     {
-        Coordinate ClosestWreck = ClosestUnit(Player.units, 4);
-        int acc = (int)Utility.map(DistanceFrom(ClosestWreck)/mass, 400, 1000/mass, 0, throttle);
-        Go(ClosestWreck, Math.Max(0, acc));
+
+        List<Looter> list = Player.units.ToList();
+
+        if(Player.units.Where(x => x.unitType == 4).ToList().Count == 0)
+        {
+            Go(new Coordinate(0,0), throttle);
+            return;
+        }
+        else
+        {
+            
+            Looter ClosestWreck = null;
+    
+            while (ClosestWreck == null)
+            {
+                ClosestWreck = ClosestUnit(list, 4);
+                
+                foreach(Looter l in Player.units.Where(x => x.playerId != -1).Where(x => x.unitType == 0))
+                {
+                    if (ClosestWreck == null || list.Count == 0)
+                    {
+                        ClosestWreck = Player.joueurs[0].units[1];
+                        break;
+                    }
+            
+                    if (ClosestWreck.DistanceFrom(l.position) < 200)
+                    {
+                        list.Remove(ClosestWreck);
+                        ClosestWreck = null;
+                    }
+                }
+                
+                Console.Error.WriteLine(ClosestWreck);
+            }
+    
+            if (ClosestWreck == null)
+            {
+                ClosestWreck = (Wreck)ClosestUnit(Player.units, 4);
+            }
+    
+            int acc = (int)Utility.map(DistanceFrom(ClosestWreck.position), 500/mass, 1000/mass, 0, throttle);
+            Go(ClosestWreck.position, Math.Max(0, acc));
+        }
     }
 }
 
@@ -146,9 +187,16 @@ public class Destroyer : Looter{
 
     public override void Decide()
     {
-        Coordinate ClosestTanker = ClosestUnit(Player.units, 3);
+        Tanker ClosestTanker = (Tanker)ClosestUnit(Player.units, 3);
         int acc = throttle;
-        Go(ClosestTanker, acc);
+        if (ClosestTanker == null)
+        {
+            Go(new Coordinate(0,0), acc);
+        }
+        else
+        {
+        Go(ClosestTanker.position, acc);
+        }
     }
 }
 
@@ -160,7 +208,18 @@ public class Doof : Looter{
 
     public override void Decide()
     {
-        Wait();
+        Coordinate target;
+        target = new Coordinate((int)(Player.joueurs[1].units[0].position.X + Player.joueurs[2].units[0].position.X)/2, (int)(Player.joueurs[1].units[0].position.Y + Player.joueurs[2].units[0].position.Y)/2);
+        int distance = DistanceFrom(target);
+        int acc = (int)Utility.map(distance, 200/mass, 3000/mass, 0, throttle);
+        if (DistanceFrom(target) > 400)
+        {
+            Go(target, acc);
+        }
+        else
+        {
+            Skill(target);
+        }
     }
 }
 
